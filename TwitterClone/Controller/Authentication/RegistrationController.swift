@@ -1,9 +1,11 @@
 import UIKit
+import Firebase
 
 class RegistrationController: UIViewController {
     
     // MARK: - Properties
     private let imagePicker = UIImagePickerController()
+    private var profileImage: UIImage?
     
     private lazy var plusPhotoButton: UIButton = {
         let button = UIButton(type: .system)
@@ -63,7 +65,7 @@ class RegistrationController: UIViewController {
     
     private lazy var registerButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Log In", for: .normal)
+        button.setTitle("Sign Up", for: .normal)
         button.setTitleColor(.mainBlue, for: .normal)
         button.backgroundColor = .white
         button.heightAnchor.constraint(equalToConstant: 50).isActive = true
@@ -98,7 +100,50 @@ class RegistrationController: UIViewController {
     }
     
     @objc func handleRegister() {
-        print("Register")
+        guard let profileImage = profileImage else {
+            print("DEBUG: no image uploeaded")
+            return
+        }
+        guard let email = emailTextField.text else { return }
+        guard let password = passwordTextField.text else { return }
+        guard let fullname = fullNameTextField.text else { return }
+        guard let username = usernameTextField.text else { return }
+        
+        guard let imageData = profileImage.jpegData(compressionQuality: 0.3) else { return }
+        let filename = NSUUID().uuidString
+        let storageRef = STORAGE_PROFILE_IMAGES.child(filename)
+        
+        storageRef.putData(imageData, metadata: nil) { (meta, error) in
+            storageRef.downloadURL { (url, error) in
+                guard let profileImageUrl = url?.absoluteString else { return }
+                
+                Auth.auth().createUser(withEmail: email, password: password) { (result, error) in
+                    if let error = error {
+                        print("DEBUG: Error is \(error.localizedDescription)")
+                        return
+                    }
+                    
+                    guard let uid = result?.user.uid else { return }
+                    let values = ["email": email,
+                                  "username": username,
+                                  "fullname": fullname,
+                                  "profileImageUrl": profileImageUrl]
+                    
+                    REF_USERS
+                        .child(uid)
+                        .updateChildValues(values) { (error, ref) in
+                        print("DEBUG: Successfully updated user information.")
+                        
+                    }
+                    
+                }
+                
+            }
+        }
+        
+
+        
+        print("DEBUG: email: \(email)/ password: \(password)")
     }
     
     // MARK: - Helpers
@@ -143,6 +188,7 @@ class RegistrationController: UIViewController {
 extension RegistrationController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         guard let profileImg = info[.editedImage] as? UIImage else { return }
+        self.profileImage = profileImg
         
         plusPhotoButton.layer.cornerRadius = 150 / 2
         plusPhotoButton.layer.masksToBounds = true
